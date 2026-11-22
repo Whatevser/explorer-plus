@@ -2,6 +2,7 @@ PREFIX ?= /usr/share/cockpit
 NAME = explorer
 INSTALL_DIR = $(PREFIX)/$(NAME)
 SYSCONF ?= /etc/cockpit/$(NAME)
+EXEC_DIR ?= /usr/libexec/$(NAME)
 VERSION := $(shell cat VERSION)
 TAG := v$(VERSION)
 
@@ -20,6 +21,7 @@ export RELEASE_NOTES
 # installed copy.
 FILES = manifest.json index.html README.md VERSION Makefile \
         css js html actions screenshots report
+PACKAGE_FILES = $(FILES) libexec
 
 # Coverage is measured over the shipped browser sources only (js/**). tests/ is
 # excluded because a test file's own coverage says nothing, and the e2e/smoke
@@ -105,21 +107,30 @@ install:
 	install -d $(INSTALL_DIR)
 	cp -r $(FILES) $(INSTALL_DIR)/
 	install -d $(SYSCONF)
+	install -d $(EXEC_DIR)
+	install -m 0755 libexec/explorer-update $(EXEC_DIR)/explorer-update
+	@if [ -e .git ]; then sha="$(git rev-parse --verify HEAD 2>/dev/null || true)"; else sha=""; fi; \
+	if printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then \
+	  printf '%s\n' "$sha" > $(SYSCONF)/installed-commit; \
+	else \
+	  rm -f $(SYSCONF)/installed-commit; \
+	fi
 	@echo
-	@echo "Installed explorer $(VERSION) to $(INSTALL_DIR)"
+	@echo "Installed explorer $(VERSION) to $(INSTALL_DIR) with Cockpit update helper"
 	@echo "Restart Cockpit with: systemctl try-restart cockpit"
 	@echo "Then reload Cockpit in the browser. Look under 'Tools → Explorer'."
 
 uninstall:
 	@if [ "$$(id -u)" != "0" ]; then echo "uninstall requires root (use sudo)"; exit 1; fi
 	rm -rf $(INSTALL_DIR)
+	rm -f $(EXEC_DIR)/explorer-update
 	@echo "Removed $(INSTALL_DIR)"
 	@echo "Note: left $(SYSCONF) in place (contains your system actions). Remove it manually if desired."
 
 zip:
 	@tmp=$$(mktemp -d); \
 	mkdir "$$tmp/explorer"; \
-	cp -r $(FILES) "$$tmp/explorer/"; \
+	cp -r $(PACKAGE_FILES) "$tmp/explorer/"; \
 	rm -rf "$$tmp/explorer/COVERAGE.html" "$$tmp/explorer/coverage"; \
 	if [ -e "$$tmp/explorer/COVERAGE.html" ] || [ -e "$$tmp/explorer/coverage" ]; then \
 	  echo "refusing to ship the coverage report"; rm -rf "$$tmp"; exit 1; fi; \
