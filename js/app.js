@@ -33,6 +33,7 @@ Alpine.data('explorer', () => ({
     ui: { phone: false, moreOpen: false, aiMenuOpen: false, aiMenuTop: 0, aiMenuRight: 4, agentAddOpen: false, agentAddTop: 0, agentAddLeft: 0 },
 
     settings: structuredClone(ExRT.const.DEFAULT_SETTINGS),
+    updateInfo: { busy: false, applying: false, installed: '', latest: '', available: false, updated: false, error: '' },
 
     // Users & sudo management (3.3.0). See js/features/sudoers.js.
     su: { users: [], loading: false, error: '', adminGroup: '', canAdmin: false, me: '', adminCount: 0, busy: false, form: { username: '', password: '', sudo: false, nopasswd: false } },
