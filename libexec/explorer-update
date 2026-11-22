@@ -23,7 +23,7 @@ PLUGIN = Path("/usr/share/cockpit/explorer")
 UPDATER = Path("/usr/libexec/explorer/explorer-update")
 CONFIG = Path("/etc/cockpit/explorer")
 COMMIT_FILE = CONFIG / "installed-commit"
-LOCK_FILE = "/run/lock/explorer-update.lock"
+LOCK_FILE = "/run/explorer-update.lock"
 PLUGIN_FILES = {
     "manifest.json", "index.html", "README.md", "VERSION", "Makefile",
     "css", "js", "html", "actions", "screenshots", "report",
