@@ -2153,3 +2153,34 @@ body {
     :root { --ex-page-gutter: 0px; --ex-page-radius: 0px; }
     .tab-list { gap: 2px; }
 }
+
+/* Bootstrap buttons use locally defined --bs-btn-* values: bind them to
+   Cockpit's palette rather than retaining Bootstrap's unrelated blue. */
+.btn-primary {
+    --bs-btn-bg: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--bs-primary) 85%, #000);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--bs-primary) 80%, #000);
+    --bs-btn-active-bg: color-mix(in srgb, var(--bs-primary) 75%, #000);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--bs-primary) 75%, #000);
+    --bs-btn-disabled-bg: var(--bs-primary);
+    --bs-btn-disabled-border-color: var(--bs-primary);
+}
+:root[data-bs-theme="dark"] .btn-primary {
+    --bs-btn-color: #151515;
+    --bs-btn-hover-color: #151515;
+    --bs-btn-active-color: #151515;
+    --bs-btn-disabled-color: #151515;
+}
+.btn-outline-primary {
+    --bs-btn-color: var(--bs-primary);
+    --bs-btn-border-color: var(--bs-primary);
+    --bs-btn-hover-bg: var(--bs-primary);
+    --bs-btn-hover-border-color: var(--bs-primary);
+    --bs-btn-active-bg: var(--bs-primary);
+    --bs-btn-active-border-color: var(--bs-primary);
+}
+:root[data-bs-theme="dark"] .btn-outline-primary {
+    --bs-btn-hover-color: #151515;
+    --bs-btn-active-color: #151515;
+}
