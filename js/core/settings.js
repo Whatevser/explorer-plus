@@ -6,6 +6,7 @@ window.ExplorerSettings = {
     async _loadSettings() {
         const path = this._settingsPath();
         let loaded = null;
+        let migrate = false;
         try {
             const txt = await FS.readText(path);
             if (txt && window.jsyaml) {
@@ -19,38 +20,42 @@ window.ExplorerSettings = {
                 const raw = localStorage.getItem(ExRT.const.LS_KEY_SETTINGS);
                 if (raw) {
                     loaded = JSON.parse(raw);
-                    // Best-effort migrate to YAML on disk
-                    await this._writeSettingsYaml(loaded);
-                    try { localStorage.removeItem(ExRT.const.LS_KEY_SETTINGS); } catch (e) {}
+                    migrate = true;
                 }
             } catch (e) {}
         }
 
         if (loaded && typeof loaded === 'object') {
+            delete loaded.updateRepo;
+            delete loaded.updateCheckOnStart;
             // Deep-merge over defaults so new fields don't disappear
             Object.assign(this.settings, loaded);
             // columns is a nested object — merge defaults under it
             this.settings.columns = Object.assign({}, ExRT.const.DEFAULT_SETTINGS.columns, loaded.columns || {});
+            if (migrate) {
+                await this._writeSettingsYaml(loaded);
+                try { localStorage.removeItem(ExRT.const.LS_KEY_SETTINGS); } catch (e) {}
+            }
         }
         if (!this.settings.columns) this.settings.columns = structuredClone(ExRT.const.DEFAULT_SETTINGS.columns);
 
-        // Apply theme & track system-preference changes if 'system' mode
+        // Follow Cockpit's appearance and the OS when using the default theme.
         this.applyTheme();
-        try {
-            const mq = window.matchMedia('(prefers-color-scheme: dark)');
-            mq.addEventListener('change', () => {
-                if ((this.settings.theme || 'system') === 'system') this.applyTheme();
-            });
-        } catch (e) {}
+        const followSystem = () => {
+            if ((this.settings.theme || 'system') === 'system') this.applyTheme();
+        };
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followSystem);
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'shell:style' || event.key === null) followSystem();
+        });
     },
 
     applyTheme() {
-        const t = this.settings.theme || 'system';
-        const dark = t === 'dark'
-            || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light');
+        const theme = this.settings.theme;
+        const resolved = theme === 'dark' || theme === 'light' ? theme : window.explorerSystemTheme();
+        document.documentElement.setAttribute('data-bs-theme', resolved);
         if (window.monaco && window.monaco.editor) {
-            try { window.monaco.editor.setTheme(dark ? 'vs-dark' : 'vs'); } catch (e) {}
+            try { window.monaco.editor.setTheme(resolved === 'dark' ? 'vs-dark' : 'vs'); } catch (e) {}
         }
     },
 
@@ -69,7 +74,6 @@ window.ExplorerSettings = {
     openSettings() { bootstrap.Modal.getOrCreateInstance(this.settingsModalEl).show(); },
 
     saveSettings() {
-        if (this._suppressSettingsSave) return;   // self-update is wiping the settings file
         // Debounce: collapse multiple rapid changes into one write
         if (this._saveSettingsTimer) clearTimeout(this._saveSettingsTimer);
         this._saveSettingsTimer = setTimeout(() => {

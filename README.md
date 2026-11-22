@@ -7,26 +7,6 @@ single browser-side plugin (pure HTML/CSS/JS, **no build step**, no server
 daemon) that runs every privileged action through Cockpit's own superuser
 bridge.
 
-> **📺 Another Cockpit plugin of mine:** [**InFlight TV**](https://github.com/ismetozalp/iftv)
-> (`ismetozalp/iftv`) — an IPTV / live-TV player for the Cockpit console. If you
-> like Explorer, give it a look.
->
-> **📊 And another:** [**ctop**](https://github.com/ismetozalp/ctop) (`ismetozalp/ctop`) —
-> a live system/process monitor for the Cockpit console; from ctop you can jump straight
-> into any directory here.
->
-> **⬇️ And another:** [**Manifest**](https://github.com/ismetozalp/manifest) (`ismetozalp/manifest`) —
-> a download manager for the Cockpit console (torrents, magnets, HTTP/FTP/Metalink via a
-> per-user `aria2c`); it deep-links its downloads straight into Explorer.
->
-> **💾 And another:** [**Hangar**](https://github.com/ismetozalp/hangar) (`ismetozalp/hangar`) —
-> scheduled, deduplicated, encrypted backups for the Cockpit console (restic-based) with
-> automatic retention thinning, a point-in-time file browser, and bare-metal disaster recovery.
->
-> **🖥️ And another:** [**Pilot**](https://github.com/ismetozalp/pilot) (`ismetozalp/pilot`) —
-> installs and manages a self-hosted [RustDesk](https://rustdesk.com/) remote-desktop server
-> (`hbbs`/`hbbr` plus an API control plane) from the Cockpit console.
-
 **Highlights**
 
 - 🗂️ **Multi-tab browser** with an optional **two-pane** (Midnight Commander)
@@ -1280,24 +1260,6 @@ elevated for that path — reloads and post-save refreshes won't drop back
 and nag you again — and the tab header shows a small **root** badge so
 it's clear the listing is elevated.
 
-### Plugin Manager — update / install your Cockpit plugins
-
-![Plugin Manager](screenshots/plugins-updater.svg)
-
-The **⬆ Plugins** button in the top toolbar opens the **Plugin Manager**, which manages your six
-plugins together — **Explorer, Cockpit Top, IF TV, Manifest, Hangar, Pilot**. It shows each
-plugin's installed version and the latest GitHub release (with a **release notes ↗**
-link that opens that plugin's GitHub release page in a new tab), reading the update repo
-from each plugin's own settings file where it has one (Cockpit Top and Hangar use a built-in
-default). **Update** a single plugin or **Update all** at once; a **Force
-reinstall** toggle updates even up-to-date plugins (and IF TV, whose installed
-version isn't tracked on disk). A not-installed plugin can be installed — tick
-several and **Install selected** to install them in one go. Install output streams
-live in the panel, and when it finishes a **Restart Cockpit** button applies the
-changes (it disconnects your session — log back in after a few seconds). Downloads
-use your own `gh`/`curl` credentials; only the install step runs with
-administrator rights.
-
 ### Mounts (fstab editor)
 
 The **⛁ Mounts** button in the top toolbar opens an editor for
@@ -1469,8 +1431,7 @@ Custom actions are user-defined commands that appear at the **top** of the
 right-click menu, filtered by the type and pattern you configure (grouped
 into User / System submenus when there are more than three — see the
 context-menu section above). Each item carries a small **user**/**system**
-badge showing where the action comes from (built-in actions like the
-self-updater show as **system**).
+badge showing where the action comes from.
 
 Two configuration layers, last-wins-merged in the menu (system actions
 appear above user ones):
@@ -1718,58 +1679,9 @@ Protocol.
 See `actions/example-actions.json` for a working set you can drop into
 `/etc/cockpit/explorer/actions.json` or use as a template.
 
-### Self-update action
+### Publishing releases
 
-The plugin ships a built-in **system** action, *"Update Explorer plugin
-from this archive"* (defined in `actions/system-actions.json` and loaded
-from the install dir, so it always matches the installed version and
-can't be clobbered or fall out of date). It appears in the right-click
-menu whenever you select a file named like `explorer-1.9.zip` /
-`explorer-1.9.2.zip` (regex `^explorer-\d+\.\d+(\.\d+)?\.zip$`).
-
-What it does, step by step:
-
-1. **Confirms** the update, showing the installed `{oldVersion}` and the
-   archive's `{newVersion}` and warning that Cockpit will restart.
-2. **Optional pre-step** — asks *"Reset Explorer to default settings?"*
-   with **Delete settings / Skip / Cancel**. *Delete settings* removes
-   `~/.config/cockpit/explorer` (tabs, preferences, your user actions);
-   *Skip* keeps them; *Cancel* aborts.
-3. Extracts the archive to a temp dir, runs `make install` as
-   administrator (output streams in a new pane), then restarts Cockpit
-   via a **detached** `systemd-run` unit so the restart survives the
-   page disconnect. After it comes back, hard-reload — the version badge
-   reflects the new version.
-
-`make install` records the installed version in
-`/etc/cockpit/explorer/installed-version`. The action's `privilege` is
-`require`, so you must have **administrative access** turned on in
-Cockpit; otherwise the command can't run as root.
-
-### Checking for updates online
-
-The plugin can check a GitHub repo's **Releases** for a newer version and
-kick off the self-update for you:
-
-- **Version badge** (top-right): click it to check now. When a newer
-  release is found the badge turns green and shows `↑ Explorer vX.Y.Z`;
-  clicking it opens an **update dialog**.
-- **Update dialog**: shows the available and installed versions and a
-  **Download & install** button. It also has a **Delete settings file**
-  checkbox (off by default) — leave it unchecked to keep your settings, or
-  tick it to remove `~/.config/cockpit/explorer/settings.yml` during the
-  update so the new version starts from defaults.
-- **Settings → Update source**: the GitHub repo (or releases URL) to
-  check. Default `ismetozalp/explorer`. *Check for updates on startup*
-  controls the automatic check (on by default); a **Check for updates
-  now** button runs it on demand.
-- **On startup** (when enabled) the plugin checks in the background a few
-  seconds after load; if a newer release exists it offers the update.
-
-The release zip is fetched with the GitHub CLI when available
-(authenticated, no rate limits) and otherwise via an anonymous `curl` to
-the GitHub API. The newest release's tag (e.g. `v1.0.6`) is compared
-numerically against the installed version. Publish releases with
+Publish releases with
 `make publish`, which tags `v$(VERSION)`, uploads `explorer-$(VERSION).zip`,
 and then deletes that local zip (only after a successful publish). Release
 notes default to `Release $(VERSION)`; override them with
@@ -1787,7 +1699,7 @@ explorer/
 ├── html/
 │   └── modals/               dialog partials, fetched + injected by js/boot.js
 │       ├── windows.html  files.html    dialogs.html  mounts.html   grub.html
-│       ├── actions.html  toolbar.html  github.html   plugins.html  sudoers.html
+│       ├── actions.html  toolbar.html  github.html   sudoers.html
 │       └── agent-sessions.html         AI resume-session browser
 ├── css/
 │   ├── bootstrap.min.css      Bootstrap 5.3.3
@@ -1818,7 +1730,7 @@ explorer/
 │   ├── boot.js                    fetches html/modals/* → injects → loads Alpine (no build step)
 │   ├── features/                  per-feature method mixins (window.Explorer…)
 │   │   ├── github.js   mounts.js   actions.js   terminal.js   upload.js
-│   │   ├── editor.js   grub.js     videoplayer.js  plugins.js  sudoers.js
+│   │   ├── editor.js   grub.js     videoplayer.js  sudoers.js
 │   │   ├── deeplink.js             open a path/pane from a URL fragment
 │   │   ├── agent.js               AI CLI tabs — launch, live diff pane, repo tree, move-to-AI, tmux
 │   │   ├── agent-sessions.js      AI resume: parse the Claude/Codex session stores
@@ -1828,8 +1740,7 @@ explorer/
 │   │   └── output.js  dialogs.js  settings.js
 │   └── app.js                     reactive state, init, and the Alpine.data composer
 ├── actions/
-│   ├── example-actions.json  drop-in example custom actions
-│   └── system-actions.json   default system actions (incl. self-update), seeded by make install
+│   └── example-actions.json  drop-in example custom actions
 ├── report/              census.py — pure-Python (stdlib) code-census PDF generator
 ├── tools/               dev-only checks (check-mixins.js, compose-test.js)
 ├── tests/               unit (node+vm), smoke, and Playwright e2e tests

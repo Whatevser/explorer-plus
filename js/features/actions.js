@@ -35,7 +35,10 @@ window.ExplorerActions = {
             if (txt) {
                 const data = JSON.parse(txt);
                 if (Array.isArray(data.actions)) {
-                    this.customActions[scope] = data.actions.map(a => this._normalizeAction(a));
+                    // Old installs could seed Explorer's updater in actions.json.
+                    this.customActions[scope] = data.actions
+                        .filter(a => a.id !== 'explorer-self-update')
+                        .map(a => this._normalizeAction(a));
                 }
             }
         } catch (e) {
@@ -44,36 +47,10 @@ window.ExplorerActions = {
         this.actionsMgr.loaded[scope] = true;
     },
 
-    // Built-in actions ship with the plugin (e.g. the self-update action) and
-    // are always current with the installed version. They're loaded from the
-    // package dir, NOT the editable /etc file, so updating the plugin updates
-    // them and they can't be clobbered or fall out of date.
-    async _loadBuiltinActions() {
-        let txt = '';
-        try {
-            const r = await fetch('actions/system-actions.json', { cache: 'no-store' });
-            if (r.ok) txt = await r.text();
-        } catch (e) {}
-        if (!txt) {
-            try { txt = await FS.readText('/usr/share/cockpit/explorer/actions/system-actions.json'); } catch (e) {}
-        }
-        if (!txt) return;
-        try {
-            const data = JSON.parse(txt);
-            const list = Array.isArray(data) ? data : (data && Array.isArray(data.actions) ? data.actions : []);
-            this.customActions.builtin = list.map(a => this._normalizeAction(a));
-        } catch (e) {
-            console.warn('[explorer] could not parse built-in actions:', e);
-        }
-    },
-
-    // Re-read every custom-action source (user + system + built-in) from disk,
-    // so edits made to the actions.json files show up without a page reload.
     async reloadActions() {
         await Promise.all([
             this._loadCustomActions('user'),
             this._loadCustomActions('system'),
-            this._loadBuiltinActions(),
         ]);
         // The selected index may now point past the end of a shrunk list.
         this.actionsMgr.editingIdx = null;
@@ -430,16 +407,9 @@ window.ExplorerActions = {
         const tab = this.currentPane();
         if (!tab) return [];
         const sel = this.selectedFiles(tab);
-        // Built-in actions (e.g. self-update) ship with the plugin and are
-        // authoritative for their ids: drop any stale editable action that was
-        // seeded with the same id in a previous version. Each action is tagged
-        // with its source so the menu can show a user/system badge.
-        const builtin = this.customActions.builtin || [];
-        const builtinIds = new Set(builtin.map(a => a.id));
         const tagged = [
-            ...builtin.map(a => ({ a, source: 'system' })),
-            ...this.customActions.system.filter(a => !builtinIds.has(a.id)).map(a => ({ a, source: 'system' })),
-            ...this.customActions.user.filter(a => !builtinIds.has(a.id)).map(a => ({ a, source: 'user' })),
+            ...this.customActions.system.map(a => ({ a, source: 'system' })),
+            ...this.customActions.user.map(a => ({ a, source: 'user' })),
         ];
         const targets = sel.length > 0 ? sel : (file ? [file] : []);
         const anyInCache = targets.some(t => this.insideAnyRepoCache(t.path));
@@ -476,7 +446,7 @@ window.ExplorerActions = {
 
     // Group applicable custom actions for the context menu. When there are more
     // than 3 in total they're split into "User" / "System" flyout submenus;
-    // 3 or fewer stay flat. Built-in actions count as System.
+    // 3 or fewer stay flat.
     ctxActionGroups(file) {
         const all = this.applicableActions(file);
         const user = all.filter(a => a._source === 'user');
@@ -574,12 +544,9 @@ window.ExplorerActions = {
     // ── Global (file-independent) actions — run from the toolbar ──────────
     // All actions whose appliesTo === 'global', tagged with their source.
     globalActions() {
-        const builtin = this.customActions.builtin || [];
-        const builtinIds = new Set(builtin.map(a => a.id));
         return [
-            ...builtin.map(a => ({ a, source: 'system' })),
-            ...this.customActions.system.filter(a => !builtinIds.has(a.id)).map(a => ({ a, source: 'system' })),
-            ...this.customActions.user.filter(a => !builtinIds.has(a.id)).map(a => ({ a, source: 'user' })),
+            ...this.customActions.system.map(a => ({ a, source: 'system' })),
+            ...this.customActions.user.map(a => ({ a, source: 'user' })),
         ].filter(({ a }) => a.appliesTo === 'global').map(({ a, source }) => ({ ...a, _source: source }));
     },
     // Context for a global action: no file, {dir} is the active pane's folder.
@@ -667,14 +634,13 @@ window.ExplorerActions = {
     // ───── Interactive scripts (Explorer Script Prompt Protocol) ───────────
     // Where a scope's uploaded scripts live (sibling of its actions.json).
     _scriptsDir(scope) {
-        return (scope === 'system' || scope === 'builtin')
+        return scope === 'system'
             ? ExRT.const.SYSTEM_SCRIPTS_DIR
             : (this.homePath || '') + ExRT.const.USER_SCRIPTS_DIR_SUFFIX;
     },
     _actionScope(action) {
         if (action && action._source) return action._source;   // menu passes a copy tagged with its source
         if ((this.customActions.system || []).includes(action)) return 'system';
-        if ((this.customActions.builtin || []).includes(action)) return 'builtin';
         return 'user';
     },
 

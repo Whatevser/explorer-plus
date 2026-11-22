@@ -1,12 +1,9 @@
 // Consolidated mobile-friendliness e2e (Task 5 of the mobile-friendly SDD plan).
 // Folds in, on a single iPhone 13 emulation profile, the checks proven
 // individually across Tasks 1-4: ui.phone flag + no page overflow, the ⋯
-// More menu (with ▶ Run staying inline / pinned), the global-actions modal,
-// and the Plugin Manager opened via ⋯. Finishes with a desktop regression
-// pass (.toolbar-more hidden, inline ⚙ Actions visible) at 1280x800.
+// More menu (with ▶ Run staying inline / pinned) and the global-actions modal.
+// Finishes with a desktop pass at 1280x800.
 //
-// Boot boilerplate (login → find iframe[src*="explorer"] → contentFrame() →
-// wait for the tab bar) is modeled on tests/plugins-e2e.mjs.
 import { chromium, devices } from 'playwright';
 import os from 'os';
 
@@ -62,7 +59,7 @@ try {
   const noOverflow = await app.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
   assert(noOverflow, 'no horizontal page overflow on the main view');
 
-  // (b) ⋯ More menu visible + exposes Mounts/Actions/Plugins/Settings, while
+  // (b) ⋯ More menu visible + exposes Mounts/Actions/Settings, while
   // ▶ Run stays inline. Also: regression check from the tab-bar pin fix —
   // both ▶ Run and ⋯ bounding boxes stay within the viewport.
   const runBtn = app.locator('.tab-bar-btn[title="Run a global action (not tied to a file)"]');
@@ -77,7 +74,7 @@ try {
 
   await moreBtn.click();
   await app.locator('.toolbar-more-panel').waitFor({ state: 'visible', timeout: 5000 });
-  for (const label of ['Mounts', 'Actions', 'Plugins', 'Settings']) {
+  for (const label of ['Mounts', 'Actions', 'Settings']) {
     const n = await app.locator('.toolbar-more-item', { hasText: label }).count();
     assert(n >= 1, `⋯ menu exposes "${label}"`);
   }
@@ -88,21 +85,21 @@ try {
   // of the same .toolbar-more-item), and that the centre lies within the
   // viewport. This FAILS on the pre-fix absolute/clipped panel, PASSES once the
   // panel is position:fixed and escapes the .tab-bar clip.
-  const pluginsItem = app.locator('.toolbar-more-item', { hasText: 'Plugins' }).first();
-  const pib = await pluginsItem.boundingBox();
-  assert(!!pib, '⋯ "Plugins" item has a bounding box');
-  if (pib) {
-    const cx = Math.round(pib.x + pib.width / 2);
-    const cy = Math.round(pib.y + pib.height / 2);
+  const settingsItem = app.locator('.toolbar-more-item', { hasText: 'Settings' }).first();
+  const settingsBox = await settingsItem.boundingBox();
+  assert(!!settingsBox, '⋯ "Settings" item has a bounding box');
+  if (settingsBox) {
+    const cx = Math.round(settingsBox.x + settingsBox.width / 2);
+    const cy = Math.round(settingsBox.y + settingsBox.height / 2);
     const inViewport = cx >= 0 && cx <= innerWidth && cy >= 0 && cy <= (await app.evaluate(() => window.innerHeight));
-    assert(inViewport, '⋯ "Plugins" item centre is within the viewport');
+    assert(inViewport, '⋯ "Settings" item centre is within the viewport');
     const hit = await app.evaluate(([x, y]) => {
       const el = document.elementFromPoint(x, y);
       if (!el) return { ok: false, tag: 'null' };
       const item = el.closest('.toolbar-more-item');
       return { ok: !!item, tag: el.tagName + (el.className ? '.' + String(el.className).split(' ').join('.') : '') };
     }, [cx, cy]);
-    assert(hit.ok, `⋯ "Plugins" item is hit-testable at its centre (elementFromPoint → ${hit.tag})`);
+    assert(hit.ok, `⋯ "Settings" item is hit-testable at its centre (elementFromPoint → ${hit.tag})`);
   }
   // Close the panel before interacting elsewhere.
   await moreBtn.click();
@@ -126,23 +123,6 @@ try {
   }
   await app.locator('#globalActionsModal .btn-close').click();
   await app.locator('#globalActionsModal.show').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
-
-  // (d) Plugin Manager opened via ⋯ → Plugins: body fits, first row button on-screen.
-  await moreBtn.click();
-  await app.locator('.toolbar-more-panel').waitFor({ state: 'visible', timeout: 5000 });
-  await app.locator('.toolbar-more-item', { hasText: 'Plugins' }).click();
-  await app.locator('#pluginsModal.show').waitFor({ timeout: 5000 });
-  const pmBodyFits = await app.evaluate(() => {
-    const b = document.querySelector('#pluginsModal .modal-body');
-    return b.scrollWidth <= b.clientWidth + 1;
-  });
-  assert(pmBodyFits, 'Plugin Manager modal body fits (no horizontal overflow)');
-  const firstRowBtn = app.locator('#pluginsModal tbody tr').first().locator('button');
-  await firstRowBtn.first().waitFor({ state: 'visible', timeout: 20000 });
-  box = await firstRowBtn.first().boundingBox();
-  assert(!!box && box.x >= 0 && box.x + box.width <= innerWidth + 1, 'Plugin Manager first row button on-screen');
-  await app.locator('#pluginsModal .modal-footer button', { hasText: /^Close$/ }).click();
-  await app.locator('#pluginsModal.show').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 
   await phoneCtx.close();
 

@@ -14,7 +14,6 @@ Alpine.data('explorer', () => ({
     ...window.ExplorerEditor,  // js/features/editor.js
     ...window.ExplorerVideo,   // js/features/videoplayer.js
     ...window.ExplorerDeepLink,  // js/features/deeplink.js
-    ...window.ExplorerPlugins,   // js/features/plugins.js
     ...window.ExplorerSudoers,   // js/features/sudoers.js
     ...window.ExplorerAgent,        // js/features/agent.js
     ...window.ExplorerAgentSessions, // js/features/agent-sessions.js
@@ -35,12 +34,6 @@ Alpine.data('explorer', () => ({
 
     settings: structuredClone(ExRT.const.DEFAULT_SETTINGS),
 
-    // Self-update / release-check state
-    updateState: { checking: false, available: null, deleteSettings: false },
-
-    // Plugin Manager (update/install other Cockpit plugins) state
-    pluginUpd: { open: false, checking: false, updating: false, force: false, rows: [], log: '', finished: false },
-    pluginsModalEl: null,
     // Users & sudo management (3.3.0). See js/features/sudoers.js.
     su: { users: [], loading: false, error: '', adminGroup: '', canAdmin: false, me: '', adminCount: 0, busy: false, form: { username: '', password: '', sudo: false, nopasswd: false } },
     sudoersModalEl: null,
@@ -49,7 +42,7 @@ Alpine.data('explorer', () => ({
     agentBrowser: { open: false, loading: false, rows: [], filter: 'all', q: '', expanded: {} },
     agentSessionsModalEl: null,
 
-    customActions: { user: [], system: [], builtin: [] },
+    customActions: { user: [], system: [] },
 
     operations: [],
     nextOpSeq: 1,
@@ -119,8 +112,6 @@ Alpine.data('explorer', () => ({
     actionsModalEl: null,
 
     globalActionsModalEl: null,
-
-    updateModalEl: null,
 
     settingsModalEl: null,
 
@@ -194,7 +185,15 @@ Alpine.data('explorer', () => ({
 
 
     // ───── Init ──────────────────────────────────────────────────────────────
-    async init() {
+    init() {
+        return this._init().catch(error => {
+            if (!document.documentElement.classList.contains('explorer-loading')) throw error;
+            console.error('[explorer] could not initialize:', error);
+            document.getElementById('explorer-startup-error').hidden = false;
+        });
+    },
+
+    async _init() {
         this.homePath = await FS.homeDir();
         // Start the repo-cache read now, but DON'T await it here — see the
         // Promise.all beside _loadSettings() below for why. _prefillGitFromCache
@@ -207,10 +206,6 @@ Alpine.data('explorer', () => ({
         // it overlap reapOrphanPreviews() and the settings load below instead
         // of serializing in front of them.
         const repoCacheP = this._loadRepoCache();
-
-        // Awaited: it deletes under the very cache root the first preview may
-        // start a session in, so it must finish before anything else runs.
-        await this.reapOrphanPreviews();   // clean up segment dirs a prior crash left behind (in-use dirs are skipped)
 
         // Phone breakpoint drives the toolbar's ⋯ More collapse. CSS media
         // queries (max-width:640px) do the purely-visual reflow; this keeps the
@@ -258,13 +253,9 @@ Alpine.data('explorer', () => ({
 
         // Load settings from ~/.config/cockpit/explorer/settings.yml
         // Migrate from localStorage if the YAML file doesn't exist yet.
-        // Awaited together with the repo-cache read kicked off above (two
-        // independent small file reads, overlapped) — this is also the
-        // point by which repoCacheP MUST be settled, since tab restore and
-        // its first _loadDir()/_prefillGitFromCache follow immediately
-        // below. In practice repoCacheP has almost always already resolved
-        // by here (it had the whole reapOrphanPreviews() window to run).
-        await Promise.all([this._loadSettings(), repoCacheP]);
+        // The repo cache and preview cleanup need to finish before restoring
+        // tabs and preview sessions. Run both alongside the settings read.
+        await Promise.all([this._loadSettings(), repoCacheP, this.reapOrphanPreviews()]);
 
         // restore or create initial tab
         let restored = false;
@@ -330,8 +321,9 @@ Alpine.data('explorer', () => ({
             this.activeTabId = this.tabs[0]?.id || null;
         }
 
-        // Load active tab
+        // Reveal the themed interface once Alpine has bound the initial tabs.
         this.$nextTick(() => {
+            document.documentElement.classList.remove('explorer-loading');
             const tab = this.activeTab();
             if (!tab) return;
             if (tab.kind === 'dir') this._loadDir(tab);
@@ -348,7 +340,6 @@ Alpine.data('explorer', () => ({
         // Load custom actions in background
         this._loadCustomActions('user');
         this._loadCustomActions('system');
-        this._loadBuiltinActions();
 
         // Persist tabs on change
         this.$watch('tabs', () => this._persistTabs(), { deep: false });
@@ -560,14 +551,7 @@ Alpine.data('explorer', () => ({
             if (r.ok) this.pluginVersion = (await r.text()).trim();
         } catch (e) {}
         if (!this.pluginVersion) {
-            for (const p of ['/usr/share/cockpit/explorer/VERSION', '/etc/cockpit/explorer/installed-version']) {
-                try { const t = await FS.readText(p); if (t && t.trim()) { this.pluginVersion = t.trim(); break; } } catch (e) {}
-            }
-        }
-
-        // Auto-check GitHub releases for a newer version (non-blocking).
-        if (this.settings.updateCheckOnStart) {
-            setTimeout(() => { this.checkForUpdate(false).catch(() => {}); }, 4000);
+            try { this.pluginVersion = (await FS.readText('/usr/share/cockpit/explorer/VERSION') || '').trim(); } catch (e) {}
         }
 
         // Write the bash rcfile that makes interactive shells emit OSC 7
@@ -697,7 +681,7 @@ Alpine.data('explorer', () => ({
 
     // Repo cache + cached-repos toolbar → js/features/github.js
     // Run command → js/core/output.js
-    // GitHub panel/update/checkout/commit/publish → js/features/github.js
+    // GitHub panel/checkout/commit/publish → js/features/github.js
 
 }));
 

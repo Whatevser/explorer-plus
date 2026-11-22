@@ -1,9 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="explorer-loading">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Explorer</title>
+    <!-- Paint the correct background before stylesheets and Alpine load. -->
+    <style>
+        html { background-color: #fff; }
+        html[data-bs-theme="dark"] { background-color: #1b1d21; }
+        html.explorer-loading body { visibility: hidden; }
+        #explorer-startup-error { visibility: visible; }
+    </style>
+    <script>
+        window.explorerSystemTheme = function () {
+            let preference;
+            try { preference = window.localStorage.getItem('shell:style'); } catch (e) {}
+            if (preference === 'light' || preference === 'dark') return preference;
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        };
+        document.documentElement.setAttribute('data-bs-theme', window.explorerSystemTheme());
+    </script>
     <link rel="stylesheet" href="css/bootstrap.min.css">
     <link rel="stylesheet" href="css/prism.css">
     <link rel="stylesheet" href="css/quill.snow.css">
@@ -13,6 +29,9 @@
     <script src="../base1/cockpit.js"></script>
 </head>
 <body x-data="explorer" @keydown.window="onKey($event)" @click.window="closeContextMenu()">
+<p id="explorer-startup-error" class="alert alert-danger m-3" role="alert" hidden>
+    Explorer could not load. Reload Cockpit or check the browser console.
+</p>
 
 <!-- ============== TAB BAR ============== -->
 <div class="tab-bar">
@@ -45,11 +64,7 @@
     <button class="tab-new tab-new-term" @click="newTerminalTab()" title="New terminal tab">+▤</button>
     <div class="tab-bar-spacer"></div>
     <span class="explorer-version-badge" x-show="pluginVersion && !ui.phone"
-          :class="{ 'update-available': updateState.available }"
-          style="cursor:pointer"
-          @click="updateState.available ? startSelfUpdate() : checkForUpdate(true)"
-          :title="updateState.checking ? 'Checking for updates…' : (updateState.available ? ('Update to v' + updateState.available.version + ' available — click to install') : 'Click to check for updates')"
-          x-text="(updateState.available ? '↑ ' : '') + 'Explorer v' + pluginVersion"></span>
+          x-text="'Explorer v' + pluginVersion"></span>
     <button class="btn btn-sm btn-link tab-bar-btn" @click="openGlobalActions()" title="Run a global action (not tied to a file)">
         <span>▶ Run</span>
     </button>
@@ -93,9 +108,6 @@
     <button class="btn btn-sm btn-link tab-bar-btn" @click="openActionsManager()" x-show="!ui.phone" title="Manage custom actions">
         <span>⚙ Actions</span>
     </button>
-    <button class="btn btn-sm btn-link tab-bar-btn" @click="openPluginUpdater()" x-show="!ui.phone" title="Plugin Manager — update or install your Cockpit plugins">
-        <span>⬆ Plugins</span>
-    </button>
     <div class="ai-menu-wrap" x-show="(ai.have.claude || ai.have.codex) && !ui.phone" x-cloak @click.outside="ui.aiMenuOpen = false" style="position:relative">
         <button class="btn btn-sm btn-link tab-bar-btn" @click="toggleAiMenu($event)" :class="{ 'tmux-btn-active': ui.aiMenuOpen }" title="Open an AI CLI (Claude / Codex) — pick the folder to start in">
             <span>✦ AI ▾</span>
@@ -121,15 +133,12 @@
             <button class="toolbar-more-item" @click="ui.moreOpen=false; openMounts()">⛁ Mounts</button>
             <button class="toolbar-more-item" x-show="grub.available" @click="ui.moreOpen=false; openGrub()">⏻ GRUB</button>
             <button class="toolbar-more-item" @click="ui.moreOpen=false; openActionsManager()">⚙ Actions</button>
-            <button class="toolbar-more-item" @click="ui.moreOpen=false; openPluginUpdater()">⬆ Plugins</button>
             <button class="toolbar-more-item" x-show="ai.have.claude" @click="ui.moreOpen=false; aiPickAndOpen('claude', currentPane().path)">✦ New Claude…</button>
             <button class="toolbar-more-item" x-show="ai.have.codex" @click="ui.moreOpen=false; aiPickAndOpen('codex', currentPane().path)">◆ New Codex…</button>
             <button class="toolbar-more-item" x-show="ai.have.claude || ai.have.codex" @click="ui.moreOpen=false; openAgentSessions()">⟲ Resume AI session</button>
             <button class="toolbar-more-item" @click="ui.moreOpen=false; openUsers()">⛊ Users &amp; sudo</button>
             <button class="toolbar-more-item" @click="ui.moreOpen=false; openSettings()">⚙ Settings</button>
-            <button class="toolbar-more-item" x-show="pluginVersion"
-                    @click="ui.moreOpen=false; updateState.available ? startSelfUpdate() : checkForUpdate(true)"
-                    x-text="(updateState.available ? '↑ ' : '') + 'Explorer v' + pluginVersion"></button>
+            <span class="toolbar-more-item" x-show="pluginVersion" x-text="'Explorer v' + pluginVersion"></span>
         </div>
     </div>
 </div>
@@ -1405,7 +1414,6 @@
 <script src="js/features/editor.js"></script>
 <script src="js/features/videoplayer.js"></script>
 <script src="js/features/deeplink.js"></script>
-<script src="js/features/plugins.js"></script>
 <script src="js/features/sudoers.js"></script>
 <script src="js/features/agent-sessions.js"></script>
 <script src="js/features/agent.js"></script>

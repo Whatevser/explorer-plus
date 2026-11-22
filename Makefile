@@ -104,12 +104,7 @@ install:
 	@if [ -d $(INSTALL_DIR) ]; then echo "Removing previous install at $(INSTALL_DIR)"; rm -rf $(INSTALL_DIR); fi
 	install -d $(INSTALL_DIR)
 	cp -r $(FILES) $(INSTALL_DIR)/
-	@# Record the installed version (used by the self-update action's {oldVersion}).
 	install -d $(SYSCONF)
-	printf '%s\n' "$(VERSION)" > $(SYSCONF)/installed-version
-	@# Note: the self-update action ships with the plugin (built-in, loaded from
-	@# $(INSTALL_DIR)/actions/system-actions.json) so it always matches the
-	@# installed version — we no longer seed it into $(SYSCONF)/actions.json.
 	@echo
 	@echo "Installed explorer $(VERSION) to $(INSTALL_DIR)"
 	@echo "Restart Cockpit with: systemctl try-restart cockpit"

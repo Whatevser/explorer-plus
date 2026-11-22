@@ -76,7 +76,7 @@ const need = {
     upload: ['_doUpload','extractHere','compressSelected'],
     actions: ['runCustomAction','reloadActions','openActionsManager','_promptTmuxName'],
     terminal: ['addTerminalToTab','openTmuxSession','_mountTerminal','_copyToClipboard'],
-    github: ['openGithubPanel','checkForUpdate','browseCommits','ghLogin','_withGhAuth'],
+    github: ['openGithubPanel','browseCommits','ghLogin','_withGhAuth'],
     grub: ['loadGrub','saveGrub','openGrub'],
     mounts: ['loadFstab','saveFstab','_hasFindmnt'],
     init: ['init','_initExtensions'],

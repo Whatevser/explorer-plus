@@ -32,8 +32,6 @@ window.ExRT = {
             previewLimitMB: 10,
             outputMaxLines: 5000,      // streaming-pane line cap (0 = unlimited; oldest lines drop)
             theme: 'system',           // 'system' | 'light' | 'dark'
-            updateRepo: 'ismetozalp/explorer',  // GitHub owner/repo (or releases URL) to check for updates
-            updateCheckOnStart: true,           // auto-check for a newer release at startup
             clipboardUploadDir: '/tmp/explorer-clip', // remote dir for pasted terminal images
             clipboardKeepHours: 24,             // prune clip-* older than this many hours on paste (0 = never)
         },

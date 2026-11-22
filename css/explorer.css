@@ -1418,16 +1418,6 @@ pre.preview-code {
     color: #ffffff;
     border-color: #1e40af;
 }
-.explorer-version-badge.update-available {
-    background: #16a34a;          /* green = update ready */
-    border-color: #15803d;
-    animation: ex-badge-pulse 1.8s ease-in-out infinite;
-}
-@keyframes ex-badge-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-    50%      { box-shadow: 0 0 0 4px rgba(22, 163, 74, 0); }
-}
-
 /* ===== Custom actions: large dialog + Monaco editor in code mode (v1.9) ===== */
 .modal-dialog.actions-dialog-code {
     max-width: 96vw;
@@ -1856,12 +1846,11 @@ html, body { max-width: 100%; }
     .path-bar, .breadcrumbs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .breadcrumbs { flex-wrap: nowrap; white-space: nowrap; }
 
-    /* Labelled cards for the Plugin Manager (values aren't self-describing). */
+    /* Labels for table cells displayed as cards. */
     .mobile-card-table td[data-label]::before {
         content: attr(data-label) ": ";
         font-weight: 600; color: var(--ex-text-muted); margin-right: 4px;
     }
-    .plugins-table.mobile-card-table td.text-end { text-align: left !important; }
 
     /* Actions manager: stack list over editor instead of side-by-side. */
     #actionsModal .actions-row > .actions-left,
@@ -1892,7 +1881,7 @@ html, body { max-width: 100%; }
     background: none; border: 0; text-align: left; color: var(--ex-text);
     padding: 10px 12px; font-size: 14px; border-radius: 4px; white-space: nowrap;
 }
-.toolbar-more-item:hover, .toolbar-more-item:active { background: var(--ex-bg-tab); }
+button.toolbar-more-item:hover, button.toolbar-more-item:active { background: var(--ex-bg-tab); }
 
 /* ── AI CLI tabs (claude/codex): terminal + live diff split ── */
 .agent-tab-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }

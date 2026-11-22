@@ -16,9 +16,8 @@
         'html/modals/mounts.html',    // mounts / fstab / SMB / NFS
         'html/modals/grub.html',      // GRUB editor
         'html/modals/actions.html',   // custom actions manager
-        'html/modals/toolbar.html',   // settings, global actions, self-update, run command
+        'html/modals/toolbar.html',   // settings, global actions, run command
         'html/modals/github.html',    // gh panel, commit browser, publish, …
-        'html/modals/plugins.html',   // Plugin Manager (update/install Cockpit plugins)
         'html/modals/sudoers.html',   // Users & sudo management (3.3.0)
         'html/modals/agent-sessions.html', // AI session browser (4.0.0)
     ];
@@ -67,5 +66,6 @@
         console.error('[explorer] partial injection error:', e);
     }).then(startAlpine).catch(function (e) {
         console.error('[explorer] Alpine failed to start:', e);
+        document.getElementById('explorer-startup-error').hidden = false;
     });
 })();
