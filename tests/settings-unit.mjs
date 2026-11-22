@@ -37,7 +37,7 @@ function setup({ shellTheme = null, osDark = false, settingsOnDisk, legacySettin
     vm.createContext(sandbox);
     vm.runInContext(bootstrap[1], sandbox);
     vm.runInContext(fs.readFileSync(settingsFile, 'utf8'), sandbox, { filename: settingsFile.pathname });
-    const app = { ...sandbox.ExplorerSettings, homePath: '/home/demo', settings: { theme: 'system' } };
+    const app = { ...sandbox.ExplorerSettings, homePath: '/home/demo', settings: { columns: { size: true } } };
     return { app, document, sandbox, storage, media, writes };
 }
 
@@ -56,23 +56,25 @@ test('first paint and the loaded theme follow Cockpit, then the OS', async () =>
     assert.equal(document.theme, 'dark');
 });
 
-test('only the default theme tracks Cockpit and OS appearance changes', async () => {
+test('appearance tracks Cockpit and OS changes, ignoring legacy overrides', async () => {
     const { app, document, sandbox, media, storage } = setup({
-        shellTheme: 'dark', settingsOnDisk: '{"theme":"light","updateCheckOnStart":true}',
+        shellTheme: 'dark', settingsOnDisk: '{"theme":"light","updateCheckOnStart":true,"columns":{"owner":true}}',
     });
     assert.equal(document.theme, 'dark');
     await app._loadSettings();
-    assert.equal(document.theme, 'light');
+    assert.equal(document.theme, 'dark');
+    assert.equal('theme' in app.settings, false);
     assert.equal('updateCheckOnStart' in app.settings, false);
+    assert.equal(app.settings.columns.owner, true);
+
     storage.set('shell:style', 'auto');
-    media.matches = true;
+    media.matches = false;
     sandbox.onStorage({ key: 'shell:style' });
-    media.onChange();
     assert.equal(document.theme, 'light');
 
     const editorThemes = [];
     sandbox.monaco = { editor: { setTheme: theme => editorThemes.push(theme) } };
-    delete app.settings.theme;
+    media.matches = true;
     media.onChange();
     assert.equal(document.theme, 'dark');
     storage.set('shell:style', 'light');
@@ -89,8 +91,9 @@ test('legacy settings migration drops updater options and preserves other prefer
         legacySettings: '{"theme":"dark","updateRepo":"old/repo","updateCheckOnStart":true,"columns":{"owner":true}}',
     });
     await app._loadSettings();
-    assert.equal(document.theme, 'dark');
+    assert.equal(document.theme, 'light');
+    assert.equal('theme' in app.settings, false);
     assert.deepEqual({ ...app.settings.columns }, { size: true, owner: true });
-    assert.deepEqual(writes, [['/home/demo/.config/cockpit/explorer/settings.yml', { theme: 'dark', columns: { owner: true } }]]);
+    assert.deepEqual(writes, [['/home/demo/.config/cockpit/explorer/settings.yml', { columns: { owner: true } }]]);
     assert.equal(storage.has('explorer:settings'), false);
 });

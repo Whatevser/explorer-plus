@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""Update Cockpit Explorer from the latest immutable GitHub main commit.
+
+Only known plugin assets are extracted. No Makefile or script from the archive is
+executed. The old plugin is preserved until the replacement is fully installed.
+Personal and system settings live outside the plugin directory and are untouched.
+"""
+import fcntl
+import json
+import os
+import re
+import shutil
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path, PurePosixPath
+
+REPO = "Whatevser/explorer-plus"
+API = "https://api.github.com/repos/" + REPO + "/commits/main"
+ARCHIVE = "https://codeload.github.com/" + REPO + "/tar.gz/"
+PLUGIN = Path("/usr/share/cockpit/explorer")
+UPDATER = Path("/usr/libexec/explorer/explorer-update")
+CONFIG = Path("/etc/cockpit/explorer")
+COMMIT_FILE = CONFIG / "installed-commit"
+LOCK_FILE = "/run/explorer-update.lock"
+PLUGIN_FILES = {
+    "manifest.json", "index.html", "README.md", "VERSION", "Makefile",
+    "css", "js", "html", "actions", "screenshots", "report",
+}
+ARCHIVE_FILES = PLUGIN_FILES | {"libexec"}
+MAX_ARCHIVE = 100 * 1024 * 1024
+MAX_EXTRACTED = 250 * 1024 * 1024
+
+
+def request(url):
+    return urllib.request.urlopen(urllib.request.Request(url, headers={
+        "User-Agent": "explorer-plus-updater",
+        "Accept": "application/vnd.github+json",
+    }), timeout=45)
+
+
+def latest_commit():
+    with request(API) as response:
+        value = json.load(response).get("sha")
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}", value):
+        raise RuntimeError("GitHub returned an invalid commit SHA")
+    return value
+
+
+def installed_commit():
+    try:
+        value = COMMIT_FILE.read_text(encoding="ascii").strip()
+        return value if re.fullmatch(r"[0-9a-f]{40}", value) else ""
+    except OSError:
+        return ""
+
+
+def check():
+    installed = installed_commit()
+    latest = latest_commit()
+    print(json.dumps({
+        "installed": installed, "latest": latest, "available": installed != latest,
+    }))
+
+
+def download(sha, path):
+    total = 0
+    with request(ARCHIVE + sha) as response, path.open("wb") as output:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_ARCHIVE:
+                raise RuntimeError("GitHub archive exceeds the size limit")
+            output.write(chunk)
+
+
+def unpack(archive_path, destination):
+    total = 0
+    with tarfile.open(archive_path, "r:gz") as archive:
+        for member in archive:
+            parts = PurePosixPath(member.name).parts
+            if len(parts) < 2 or member.name.startswith("/") or ".." in parts or "\\" in member.name:
+                continue
+            relative = Path(*parts[1:])
+            if relative.parts[0] not in ARCHIVE_FILES:
+                continue
+            if member.issym() or member.islnk() or not (member.isdir() or member.isfile()):
+                raise RuntimeError("Unsafe GitHub archive entry: " + member.name)
+            target = destination / relative
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            total += member.size
+            if total > MAX_EXTRACTED:
+                raise RuntimeError("GitHub archive expands beyond the size limit")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            data = archive.extractfile(member)
+            if data is None:
+                raise RuntimeError("Missing archive entry: " + member.name)
+            with data, target.open("wb") as output:
+                shutil.copyfileobj(data, output)
+            target.chmod(0o644)
+    for name in ("manifest.json", "index.html", "VERSION",
+                 "js/app.js", "css/explorer.css", "libexec/explorer-update"):
+        if not (destination / name).is_file():
+            raise RuntimeError("Incomplete GitHub archive: " + name)
+
+
+def atomic_copy(source, destination, mode):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as f:
+        tmp = Path(f.name)
+    try:
+        shutil.copyfile(source, tmp)
+        tmp.chmod(mode)
+        os.replace(tmp, destination)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def atomic_text(value, destination):
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="ascii",
+                                     dir=destination.parent, delete=False) as f:
+        tmp = Path(f.name)
+        f.write(value)
+    try:
+        tmp.chmod(0o644)
+        os.replace(tmp, destination)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
+def apply():
+    if os.geteuid() != 0:
+        raise RuntimeError("Administrator access is required to update Explorer")
+    CONFIG.mkdir(parents=True, exist_ok=True)
+    PLUGIN.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCK_FILE, "a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        sha = latest_commit()
+        old_sha = installed_commit()
+        if sha == old_sha:
+            print(json.dumps({"updated": False, "commit": sha}))
+            return
+        with tempfile.TemporaryDirectory(prefix=".explorer-update-", dir=PLUGIN.parent) as dirname:
+            work = Path(dirname)
+            download(sha, work / "archive.tar.gz")
+            source = work / "source"
+            source.mkdir()
+            unpack(work / "archive.tar.gz", source)
+            stage = work / "stage"
+            stage.mkdir()
+            for item in PLUGIN_FILES:
+                origin = source / item
+                if origin.is_dir():
+                    shutil.copytree(origin, stage / item)
+                elif origin.is_file():
+                    shutil.copy2(origin, stage / item)
+            previous = work / "previous"
+            previous_updater = work / "previous-updater"
+            if UPDATER.is_file():
+                shutil.copy2(UPDATER, previous_updater)
+            had_plugin = PLUGIN.exists()
+            old_moved = False
+            new_moved = False
+            try:
+                if had_plugin:
+                    os.rename(PLUGIN, previous)
+                    old_moved = True
+                os.rename(stage, PLUGIN)
+                new_moved = True
+                atomic_copy(source / "libexec/explorer-update", UPDATER, 0o755)
+                atomic_text(sha + "\n", COMMIT_FILE)
+            except BaseException:
+                if new_moved:
+                    os.rename(PLUGIN, stage)
+                if old_moved:
+                    os.rename(previous, PLUGIN)
+                if previous_updater.is_file():
+                    atomic_copy(previous_updater, UPDATER, 0o755)
+                elif UPDATER.exists():
+                    UPDATER.unlink()
+                if old_sha:
+                    atomic_text(old_sha + "\n", COMMIT_FILE)
+                elif COMMIT_FILE.exists():
+                    COMMIT_FILE.unlink()
+                raise
+    print(json.dumps({"updated": True, "commit": sha, "previous": old_sha}))
+
+
+if __name__ == "__main__":
+    try:
+        if sys.argv[1:] == ["check"]:
+            check()
+        elif sys.argv[1:] == ["apply"]:
+            apply()
+        else:
+            raise RuntimeError("Usage: explorer-update check|apply")
+    except Exception as exc:
+        print("Explorer updater: " + str(exc), file=sys.stderr)
+        sys.exit(1)

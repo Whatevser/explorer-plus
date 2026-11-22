@@ -26,6 +26,8 @@ window.ExplorerSettings = {
         }
 
         if (loaded && typeof loaded === 'object') {
+            // Discard deprecated theme and updater settings; Cockpit owns appearance.
+            delete loaded.theme;
             delete loaded.updateRepo;
             delete loaded.updateCheckOnStart;
             // Deep-merge over defaults so new fields don't disappear
@@ -38,21 +40,21 @@ window.ExplorerSettings = {
             }
         }
         if (!this.settings.columns) this.settings.columns = structuredClone(ExRT.const.DEFAULT_SETTINGS.columns);
+        delete this.settings.theme;
 
-        // Follow Cockpit's appearance and the OS when using the default theme.
+        // Cockpit's explicit preference wins; the OS is the fallback.
         this.applyTheme();
-        const followSystem = () => {
-            if ((this.settings.theme || 'system') === 'system') this.applyTheme();
-        };
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', followSystem);
+        const followSystem = () => this.applyTheme();
+        const media = window.matchMedia('(prefers-color-scheme: dark)');
+        if (media.addEventListener) media.addEventListener('change', followSystem);
+        else if (media.addListener) media.addListener(followSystem);
         window.addEventListener('storage', (event) => {
             if (event.key === 'shell:style' || event.key === null) followSystem();
         });
     },
 
     applyTheme() {
-        const theme = this.settings.theme;
-        const resolved = theme === 'dark' || theme === 'light' ? theme : window.explorerSystemTheme();
+        const resolved = window.explorerSystemTheme();
         document.documentElement.setAttribute('data-bs-theme', resolved);
         if (window.monaco && window.monaco.editor) {
             try { window.monaco.editor.setTheme(resolved === 'dark' ? 'vs-dark' : 'vs'); } catch (e) {}
@@ -71,7 +73,55 @@ window.ExplorerSettings = {
         }
     },
 
-    openSettings() { bootstrap.Modal.getOrCreateInstance(this.settingsModalEl).show(); },
+    openSettings() {
+        bootstrap.Modal.getOrCreateInstance(this.settingsModalEl).show();
+        this.checkExplorerUpdates();
+    },
+
+    async _explorerUpdateCommand(command, privileged = false) {
+        if (typeof cockpit === 'undefined' || !cockpit.spawn)
+            throw new Error('Cockpit command execution is unavailable.');
+        const output = await cockpit.spawn(
+            ['/usr/libexec/explorer/explorer-update', command],
+            { superuser: privileged ? 'require' : false, err: 'message' });
+        return JSON.parse(output);
+    },
+
+    async checkExplorerUpdates() {
+        if (this.updateInfo.busy) return;
+        this.updateInfo.busy = true;
+        this.updateInfo.error = '';
+        try {
+            const state = await this._explorerUpdateCommand('check');
+            this.updateInfo.installed = state.installed || '';
+            this.updateInfo.latest = state.latest || '';
+            this.updateInfo.available = !!state.available;
+        } catch (error) {
+            this.updateInfo.error = 'Update check failed: ' + (error.message || String(error));
+            this.updateInfo.available = false;
+        } finally {
+            this.updateInfo.busy = false;
+        }
+    },
+
+    async applyExplorerUpdate() {
+        if (this.updateInfo.busy || !this.updateInfo.available) return;
+        this.updateInfo.busy = true;
+        this.updateInfo.applying = true;
+        this.updateInfo.error = '';
+        try {
+            const result = await this._explorerUpdateCommand('apply', true);
+            this.updateInfo.installed = result.commit || '';
+            this.updateInfo.latest = result.commit || '';
+            this.updateInfo.available = false;
+            this.updateInfo.updated = !!result.updated;
+        } catch (error) {
+            this.updateInfo.error = 'Update failed: ' + (error.message || String(error));
+        } finally {
+            this.updateInfo.applying = false;
+            this.updateInfo.busy = false;
+        }
+    },
 
     saveSettings() {
         // Debounce: collapse multiple rapid changes into one write

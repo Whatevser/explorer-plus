@@ -106,8 +106,9 @@ display-only messages and `‹ …` lines echo what was sent back to the script.
 
 ![Settings](screenshots/settings.svg)
 
-Theme, tab persistence, preview/upload limits, the streaming-pane line cap,
-and the GitHub update source / startup update check.
+Appearance follows Cockpit automatically (falling back to the operating
+system). Settings includes tab persistence, preview/upload limits, the
+streaming-pane line cap, and a check/update action for GitHub's latest commit.
 
 **New in 1.1 — Mounts: fstab editor**
 
@@ -234,22 +235,16 @@ exception (or replace the cert later via `/etc/cockpit/ws-certs.d/`).
 
 ### 2. Install the explorer plugin
 
-Same procedure on every distro. From the unpacked source folder:
+Use the included Makefile from the source folder (or the `explorer/`
+directory inside the release ZIP). It installs both the Cockpit page and
+the privileged updater helper:
 
 ```bash
-sudo cp -r explorer /usr/share/cockpit/explorer
+sudo make install
 sudo systemctl try-restart cockpit
 ```
 
-Or from the release zip:
-
-```bash
-unzip explorer-<version>.zip -d /tmp/
-sudo cp -r /tmp/explorer /usr/share/cockpit/explorer
-sudo systemctl try-restart cockpit
-```
-
-Or use the included Makefile:
+Additional Makefile targets:
 
 ```bash
 sudo make install        # → /usr/share/cockpit/explorer
@@ -258,6 +253,17 @@ make zip                 # produces explorer-<version>.zip
 make test                # unit tests (tests/*-unit.mjs) with a gated coverage report
 make coverage            # the same, plus coverage/lcov.info and COVERAGE.html
 ```
+
+Open **Settings → Explorer updates** in Cockpit to check GitHub's latest
+`main` commit and install it after administrator authorization. The helper
+lives at `/usr/libexec/explorer/explorer-update` (Python 3 standard library;
+no GitHub CLI needed). It stages the new code and rolls back an unsuccessful
+installation. Your user settings in `~/.config/cockpit/explorer` and system
+configuration in `/etc/cockpit/explorer` stay untouched. Reload the
+Explorer page after an update.
+
+Installing via a manual `cp` does **not** install the updater helper;
+run `sudo make install` once to enable updates from Cockpit.
 
 `make test` runs the pure-node unit suite under node's built-in test runner
 with `--experimental-test-coverage`; the run fails if coverage drops below the
@@ -1742,6 +1748,7 @@ explorer/
 ├── actions/
 │   └── example-actions.json  drop-in example custom actions
 ├── report/              census.py — pure-Python (stdlib) code-census PDF generator
+├── libexec/             explorer-update — Cockpit updater for GitHub commits
 ├── tools/               dev-only checks (check-mixins.js, compose-test.js)
 ├── tests/               unit (node+vm), smoke, and Playwright e2e tests
 │   └── samples/             committed preview-fixture set (one sample per

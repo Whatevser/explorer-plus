@@ -31,7 +31,6 @@ window.ExRT = {
             columns: { size: true, modified: true, perms: true, owner: true, type: false },
             previewLimitMB: 10,
             outputMaxLines: 5000,      // streaming-pane line cap (0 = unlimited; oldest lines drop)
-            theme: 'system',           // 'system' | 'light' | 'dark'
             clipboardUploadDir: '/tmp/explorer-clip', // remote dir for pasted terminal images
             clipboardKeepHours: 24,             // prune clip-* older than this many hours on paste (0 = never)
         },
