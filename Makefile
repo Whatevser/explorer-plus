@@ -109,9 +109,9 @@ install:
 	install -d $(SYSCONF)
 	install -d $(EXEC_DIR)
 	install -m 0755 libexec/explorer-update $(EXEC_DIR)/explorer-update
-	@if [ -e .git ]; then sha="$(git rev-parse --verify HEAD 2>/dev/null || true)"; else sha=""; fi; \
-	if printf '%s' "$sha" | grep -Eq '^[0-9a-f]{40}$'; then \
-	  printf '%s\n' "$sha" > $(SYSCONF)/installed-commit; \
+	@if [ -e .git ]; then sha="$$(git rev-parse --verify HEAD 2>/dev/null || true)"; else sha=""; fi; \
+	if printf '%s' "$$sha" | grep -Eq '^[0-9a-f]{40}$$'; then \
+	  printf '%s\n' "$$sha" > $(SYSCONF)/installed-commit; \
 	else \
 	  rm -f $(SYSCONF)/installed-commit; \
 	fi
